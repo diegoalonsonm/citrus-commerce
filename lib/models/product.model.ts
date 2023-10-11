@@ -7,7 +7,7 @@ const productSchema = new mongoose.Schema({
     title: {type: String, required: true},
     currentPrice: {type: Number, required: true},
     originalPrice: {type: Number, required: true},
-    outOfStock: {type: Boolean, required: true, default: false},
+    isOutOfStock: {type: Boolean, required: true, default: false},
     discountRate: {type: Number, required: true},
     brand: {type: String, required: true},
     deliveryDate: {type: String, required: true},
