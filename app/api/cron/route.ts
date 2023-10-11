@@ -9,61 +9,73 @@ export const maxDuration = 10
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export async function GET(){
+export async function GET(request: Request) {
     try {
         connectToDB()
 
-        const products = await Product.find({})
+        const products = await Product.find({});
 
-        if (!products) throw new Error('No products found')
+        if (!products) throw new Error("No product fetched");
 
-        // cron functions
-        // 1. scrape products and update db
+        // 1. scrape and update db
         const updatedProducts = await Promise.all(
-            products.map(async (currenProduct) => {
-                const scrapedProduct = await scrapeAmazonProduct(currenProduct.url)
-                if (!scrapedProduct) throw new Error("Failed to scrape the product")
+            products.map(async (currentProduct) => {
+                // Scrape product
+                const scrapedProduct = await scrapeAmazonProduct(currentProduct.url);
+
+                if (!scrapedProduct) return;
 
                 const updatedPriceHistory = [
-                    ...currenProduct.priceHistory,
-                    {price: scrapedProduct.currentPrice}
-                ]
+                    ...currentProduct.priceHistory,
+                    {
+                        price: scrapedProduct.currentPrice,
+                    },
+                ];
 
                 const product = {
                     ...scrapedProduct,
                     priceHistory: updatedPriceHistory,
                     lowestPrice: getLowestPrice(updatedPriceHistory),
                     highestPrice: getHighestPrice(updatedPriceHistory),
-                    averagePrice: getAveragePrice(updatedPriceHistory)
-                }
+                    averagePrice: getAveragePrice(updatedPriceHistory),
+                };
 
+                // Update Products in DB
                 const updatedProduct = await Product.findOneAndUpdate(
-                    { url: product.url },
+                    {
+                        url: product.url,
+                    },
                     product
-                )
+                );
 
-                // 2. check the product status and send email
-                const emailNotificationType = getEmailNotifType(scrapedProduct, currenProduct)
-                if(emailNotificationType && updatedProduct.users.length > 0) {
+                // 2. check product status and sen email
+                const emailNotifType = getEmailNotifType(
+                    scrapedProduct,
+                    currentProduct
+                );
+
+                if (emailNotifType && updatedProduct.users.length > 0) {
                     const productInfo = {
                         title: updatedProduct.title,
-                        url: updatedProduct.url
-                    }
-
-                    const emailContent = await generateEmailBody(productInfo, emailNotificationType)
-
-                    const userEmails = updatedProduct.users.map((user: any) => user.email)
-
-                    await sendEmail(emailContent, userEmails)
+                        url: updatedProduct.url,
+                    };
+                    // Construct emailContent
+                    const emailContent = await generateEmailBody(productInfo, emailNotifType);
+                    // Get array of user emails
+                    const userEmails = updatedProduct.users.map((user: any) => user.email);
+                    // Send email notification
+                    await sendEmail(emailContent, userEmails);
                 }
-                return updatedProduct
-            })
-        )
 
-    return NextResponse.json({
-        message: 'Ok', data: updatedProducts
-    })
-    } catch (error) {
-        throw new Error(`Error in GET: ${error}`);
+                return updatedProduct;
+            })
+        );
+
+        return NextResponse.json({
+            message: "Ok",
+            data: updatedProducts,
+        });
+    } catch (error: any) {
+        throw new Error(`Failed to get all products: ${error.message}`);
     }
 }
